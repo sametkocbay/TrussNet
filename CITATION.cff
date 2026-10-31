@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use TrussNet in your work, please cite it as below."
+type: software
+title: "TrussNet: Physics-Grounded Axial Transformers for Probabilistic Real-World Flow Forecasting"
+abstract: >-
+  A physics-first transformer that forecasts real turbulent airfoil wakes from PIV measurements with calibrated
+  uncertainty bounds. Third place in Track 1 (Sim-to-Real) of the NeurIPS 2026 RealPDE Competition, Team PhysicsOracle.
+authors:
+  - family-names: Kocbay
+    given-names: Samet
+    affiliation: Technical University of Munich
+  - family-names: Leutschafft
+    given-names: Maximilian
+    affiliation: Technical University of Munich
+  - family-names: Breiner
+    given-names: Oscar
+    affiliation: Technical University of Munich
+version: 1.0.0
+date-released: 2026-11-05
+license: MIT
+repository-code: "https://github.com/sametkocbay/TrussNet"
+keywords:
+  - sim-to-real
+  - turbulence
+  - particle image velocimetry
+  - transformer
+  - uncertainty quantification
