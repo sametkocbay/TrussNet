@@ -1,9 +1,15 @@
 [project]
-name = "neurips-sim2real-physicsoracle"
+name = "trussnet"
 version = "1.0.0"
-description = "PhysicsOracle: NeurIPS 2026 RealPDE Track 1 (Simulation-to-Real) submission model"
+description = "TrussNet, a physics-first transformer for sim-to-real forecasting of turbulent airfoil wakes (NeurIPS 2026 RealPDE Track 1)"
 # Mirrors the evaluation container: python 3.10, torch 2.2.2 + CUDA 12.1, numpy 1.26.
 requires-python = "==3.10.*"
+license = { text = "MIT" }
+authors = [
+    { name = "Samet Kocbay" },
+    { name = "Maximilian Leutschafft" },
+    { name = "Oscar Breiner" },
+]
 dependencies = [
     "torch==2.2.2",
     "numpy==1.26.4",

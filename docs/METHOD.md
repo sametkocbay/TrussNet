@@ -1,4 +1,4 @@
-# PhysicsOracle: Track 1 method
+# TrussNet method
 
 ## 1. Summary
 A physics scaffold estimates the freestream velocity, reads the airfoil geometry from the PIV mask and builds a baseline forecast. A 3.4 M-parameter axial transformer predicts a correction to that baseline, a zero-mean fluctuation field and residual quantiles. What matters most is the axial transformer architecture allowing to predict high-frequency modes while maintaining low inference time and training cost.
@@ -6,9 +6,12 @@ A physics scaffold estimates the freestream velocity, reads the airfoil geometry
 
 ## 2. Model
 <p align="center">
-  <img src="figures/architecture.svg"
-       alt="PhysicsOracle architecture: preprocessing, baseline, transformer, output heads and two-member decode"
-       width="70%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="figures/architecture_dark.svg">
+    <img src="figures/architecture.svg"
+         alt="TrussNet architecture, from preprocessing and baseline through the transformer and output heads to the two-member decode"
+         width="80%">
+  </picture>
 </p>
 
 The model takes **20 measured velocity frames on a 32 × 64 grid** and forecasts the next 20 frames, together with lower and upper uncertainty bounds. We combine two independently trained members, each with **3,440,787 parameters**.
@@ -88,7 +91,10 @@ We measured 1.1 ms per window at batch 5 on an A100, and 1.6 ms on an RTX 4090.
 ## 8. What mattered
 
 <p align="center">
-  <img src="figures/progress.svg" alt="Hidden development scores across 17 submissions" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="figures/progress_dark.svg">
+    <img src="figures/progress.svg" alt="Hidden development scores across 17 submissions" width="100%">
+  </picture>
 </p>
 
 

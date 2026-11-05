@@ -1,4 +1,4 @@
-# PhysicsOracle: Track 1 training package
+# TrussNet training package for Track 1
 
 Two-member physics-scaffolded axial transformer, trained from scratch and compiled ahead of time. See [METHOD.md](METHOD.md) for the model, training recipe and uncertainty bounds.
 
@@ -12,14 +12,14 @@ Two-member physics-scaffolded axial transformer, trained from scratch and compil
 
 - Build command (same as default):
 ```bash
-docker build -t physicsoracle .
+docker build -t trussnet .
 ```
 - Train command (same as default):
 ```bash
 docker run --rm --network none --gpus '"device=0"' --shm-size 32g \
   -v /path/to/train_data:/data:ro \
   -v /path/to/output:/output \
-  physicsoracle \
+  trussnet \
   python -c "import solution; solution.train('/data', '/output', 'cuda')"
 ```
 

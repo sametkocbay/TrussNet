@@ -1,4 +1,4 @@
-# PhysicsOracle: training package.
+# TrussNet training package, Team PhysicsOracle.
 # The development image provides CUDA and C++ tools for AOTInductor compilation.
 FROM --platform=linux/amd64 pytorch/pytorch:2.2.2-cuda12.1-cudnn8-devel
 

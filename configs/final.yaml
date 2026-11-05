@@ -1,7 +1,7 @@
-# Final PhysicsOracle model (NeurIPS 2026 RealPDE Track 1). Train two members, seeds 3 and 4:
+# Final TrussNet model of Team PhysicsOracle (NeurIPS 2026 RealPDE Track 1). Train two members, seeds 3 and 4:
 #   python -m rpde.train --config configs/final.yaml --fold full --seed 3 --name fm_all_s3
 #   python -m rpde.train --config configs/final.yaml --fold full --seed 4 --name fm_all_s4
-# and ship the EMA snapshot of epoch 59 of each (runs/<name>/ep59.pth). See final/METHOD.md, section 4.
+# and ship the EMA snapshot of epoch 59 of each (runs/<name>/ep59.pth). See docs/METHOD.md, section 4.
 # The sections core ... wandb are the training recipe of one member (rpde.train). The section `submission` holds the
 # decisions of the final ensemble (solution.py, rpde/tools/fit_gate.py); rpde.train ignores it.
 core:
@@ -92,7 +92,7 @@ wandb:
 submission:
   seeds: [3, 4]        # one ensemble member per seed
   epoch: 59            # EMA snapshot shipped from each member; equals eval.stop_after
-  decode:              # chosen on held-out Reynolds rows of train_real (final/METHOD.md, section 4)
+  decode:              # chosen on held-out Reynolds rows of train_real (docs/METHOD.md, section 4)
     gamma: 0.70        # prediction = mean + gamma * fluctuation
     band_scale: 0.95   # scale of the band half-width that maximises the expected SPS reward
     energy_preserve: true   # rescale the averaged fluctuation to the members' mean temporal energy

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Generate the improvement figure from the recorded development submissions.
 
-    python tools/make_improvement_figure.py --output-dir final/figures --font-scale 1.15 --theme light
+    python tools/make_improvement_figure.py --font-scale 1.15
     python tools/make_improvement_figure.py --output-dir /tmp/improvement-review --preview /tmp/improvement.png
 
 Needs matplotlib (not a training dependency); no model, GPU or flow-field data required.
@@ -22,13 +22,13 @@ import numpy as np  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "tools" / "figure_data"
-FIGURES = ROOT / "final" / "figures"
+FIGURES = ROOT / "docs" / "figures"
 
 THEMES = {  # warm neutrals with a clay accent
     "light": dict(fg="#28261f", muted="#6f6b5e", faint="#a8a494", grid="#e4e1d6", accent="#c96442",
                   dot="#c96442", other="#8f8b7c", bad="#b54a4a", final="#c96442", bg="#ffffff"),
-    "dark": dict(fg="#ece9df", muted="#aaa597", faint="#6f6b5e", grid="#3a3830", accent="#e0805f",
-                 dot="#e0805f", other="#9a968a", bad="#e07a72", final="#e0805f", bg="#141310"),
+    "dark": dict(fg="#eef2f6", muted="#8fa1b3", faint="#5d6f82", grid="#22313f", accent="#d9824b",
+                 dot="#d9824b", other="#8fa1b3", bad="#e07a72", final="#d9824b", bg="#0d1117"),
 }
 
 # annotation per submission: (text, offset in points (dx, dy), horizontal alignment); None = marker only
@@ -76,7 +76,7 @@ def improvement(output_dir=None, font_scale=1.0, theme="both", preview=None):
             continue
         plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 9.5 * font_scale, "text.color": c["fg"],
                              "axes.labelcolor": c["fg"], "xtick.color": c["muted"], "ytick.color": c["muted"],
-                             "axes.edgecolor": c["grid"], "svg.fonttype": "path", "svg.hashsalt": "physicsoracle-progress"})
+                             "axes.edgecolor": c["grid"], "svg.fonttype": "path", "svg.hashsalt": "trussnet-progress"})
         fig, ax = plt.subplots(figsize=(12, 5.6))
         fig.patch.set_facecolor(c["bg"])
         ax.set_facecolor(c["bg"])
@@ -133,7 +133,7 @@ def improvement(output_dir=None, font_scale=1.0, theme="both", preview=None):
         destination = Path(output_dir) if output_dir else FIGURES
         destination.mkdir(parents=True, exist_ok=True)
         out = destination / ("progress.svg" if theme_name == "light" else "progress_dark.svg")
-        fig.savefig(out, facecolor=c["bg"], metadata={"Date": None, "Title": "PhysicsOracle development progress"})
+        fig.savefig(out, transparent=True, metadata={"Date": None, "Title": "TrussNet development progress"})
         out.write_text("\n".join(line.rstrip() for line in out.read_text().splitlines()) + "\n")
         if preview:
             preview_path = Path(preview)
@@ -147,7 +147,7 @@ def improvement(output_dir=None, font_scale=1.0, theme="both", preview=None):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--output-dir", type=Path, help="Directory for improvement SVGs (default: final/figures).")
+    ap.add_argument("--output-dir", type=Path, help="Directory for improvement SVGs (default: docs/figures).")
     ap.add_argument("--font-scale", type=float, default=1.0, help="Figure font-size multiplier.")
     ap.add_argument("--theme", choices=["light", "dark", "both"], default="both")
     ap.add_argument("--preview", type=Path, help="PNG preview of the improvement figure.")

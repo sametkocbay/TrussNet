@@ -1,157 +1,196 @@
-# PhysicsOracle
+<p align="center">
+  <img src="docs/assets/banner.png" alt="TrussNet. Streamlines and vorticity from a lattice Boltzmann simulation of a NACA 4418 airfoil at 15 degrees, shedding a vortex street" width="100%">
+</p>
 
-Repository for Team PhysicsOracle's NeurIPS 2026 RealPDE Competition, Track 1 submission.
+<p align="center">
+  <a href="https://real-pde-competition.github.io/"><img src="https://img.shields.io/badge/NeurIPS_2026-RealPDE_Competition-d9824b" alt="NeurIPS 2026 RealPDE Competition"></a>
+  <a href="https://huggingface.co/datasets/AI4Science-WestlakeU/RealPDE-Competition-Data"><img src="https://img.shields.io/badge/dataset-Hugging_Face-ffb000?logo=huggingface&logoColor=white" alt="Dataset on Hugging Face"></a>
+  <img src="https://img.shields.io/badge/field-scientific_computing-5fa8d3" alt="Scientific computing">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-22364a" alt="MIT license"></a>
+</p>
 
-Samet Kocbay · Maximilian Leutschafft · Oscar Breiner  — Technical University of Munich
+<p align="center">
+  <b>A physics-first transformer that learns from simulation and noisy measurements to forecast real turbulent flow.</b>
+</p>
 
-This repository is used to create the final submission consisting of a docker image and a .zip file. The `README.md` you are reading explains how the submission is created, how it should look like and how to test it. For the readme of the submission refer to [final/README.md](final/README.md). For details about the submitted model, architecture and training, see [final/METHOD.md](final/METHOD.md).
+Learned flow surrogates are fast, but they often break down on real, noisy measurements. TrussNet starts from physics instead. A frozen-turbulence forecast makes the first guess, and a compact axial transformer corrects it. From 20 particle image velocimetry (PIV) frames of the wake behind an airfoil, it forecasts the next 20 frames of the velocity field with calibrated uncertainty bounds, running in about 1 ms. Built by Team PhysicsOracle, it placed **#3 out of 500 teams** in Track 1 (Sim-to-Real) of the [NeurIPS 2026 RealPDE Competition](https://real-pde-competition.github.io/).
 
-## Repository layout
+<table align="center">
+  <tr>
+    <td align="center"><b>#3 out of 500</b><br><sub>teams in Track 1</sub></td>
+    <td align="center"><b>3.44 M</b><br><sub>parameters per ensemble member</sub></td>
+    <td align="center"><b>1.1 ms</b><br><sub>per forecast window on an A100</sub></td>
+    <td align="center"><b>≈ 3 h</b><br><sub>full training on one RTX 4090</sub></td>
+  </tr>
+</table>
 
-```text
-├── README.md                         # repository guide
-├── solution.py                       # official training and prediction entry points
-├── pyproject.toml                    # local Python environment
-├── configs/
-│   └── final.yaml                    # training recipe and submission settings
-├── final/                            # source files for submission documentation
-│   ├── Dockerfile                    # training image definition
-│   ├── README.md                     # submission instructions
-│   ├── METHOD.md                     # method description
-│   └── figures/                      # SVGs referenced by METHOD.md
-├── rpde/                             # training, model and inference implementation
-│   ├── cores/axial.py                # the single transformer core implementation
-│   └── tools/                        # shipped data, compilation and predictor-assembly tools
-├── submission/
-│   └── submission.py                 # predictor runtime copied into training outputs
-├── tools/                            # repository-only packaging and figure tools
-│   ├── make_final_package.py
-│   ├── make_architecture_figure.py
-│   ├── make_improvement_figure.py
-│   └── figure_data/submissions.csv    # score history used by the improvement figure
-├── third_party/realpde_kit/           # organizer scorer and provenance README
-├── logs/
-│   ├── wandb/                        # original training logs included in submission
-│   └── reproduction_4090/            # local reproduction evidence, excluded from submission
-├── weights/                          # saved members from the original submission
-└── realpde_final_starting_kit_track1/  # organizer instructions and templates
-```
+## The challenge
 
-## Submission repository layout
+High-fidelity flow simulations are accurate but expensive, which has made fast learned surrogates an active area of research. However, these surrogates are not yet reliable enough for the real world. In real experiments, measurements are noisy, velocity vectors go missing, and the airfoil and its shadow occlude parts of the laser sheet. Learning from simulation and measurement data together is a key step toward surrogates that hold up outside the simulator.
 
-The generated `dist/final/package/` folder is the Docker build context. Its contents are copied into `/workspace` in the image and included under `physicsoracle_track1/` in the ZIP:
+The training set holds **81 real PIV trajectories** and **100 simulated trajectories** across Reynolds numbers and angles of attack, so most of the data is simulated. Submissions are scored on hidden real measurements by forecast error, turbulent kinetic energy, mean velocity profiles, the quality of the uncertainty band and inference speed.
 
-```text
-/workspace/
-├── Dockerfile
-├── README.md                         # from final/README.md
-├── METHOD.md                         # from final/METHOD.md
-├── solution.py
-├── configs/final.yaml
-├── figures/
-│   ├── architecture.svg
-│   └── progress.svg
-├── rpde/                             # model, training and inference code
-│   ├── cores/axial.py
-│   └── tools/                        # helpers called by train()
-├── submission/submission.py
-├── third_party/realpde_kit/
-│   ├── scoring.py
-│   └── README.md
-└── training_logs_948641/
-    ├── fm_all_s3/                    # output_log.txt, history.txt, config.yaml
-    └── fm_all_s4/                    # output_log.txt, history.txt, config.yaml
-```
+## How TrussNet works
 
-Training data is mounted separately at `/data`; trained weights and compiled graphs are generated in `/output`. The top-level development `tools/`, saved `weights/` and reproduction logs are excluded from the package.
+TrussNet does not learn the flow from scratch. A simple physics-based forecast makes the first guess, and the network only learns what that guess gets wrong.
 
-## Assemble the training submission
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/figures/architecture_dark.svg">
+    <img src="docs/figures/architecture.svg" alt="TrussNet architecture, from physics preprocessing and baseline forecast through the axial transformer and output heads to the two-member ensemble decode" width="88%">
+  </picture>
+</p>
 
-Run from the repository root:
+1. **Physics first guess.** We estimate the freestream velocity from the top rows of the measurement, normalize the flow by it and read the airfoil geometry from the PIV mask. Following Taylor's frozen turbulence hypothesis, the baseline advects the latest fluctuations downstream and blends them with the most recent field. On its own, this baseline already scores 77.63.
+2. **Axial transformer correction.** The 20 input frames are folded into channels and grouped into 1 × 2 patches, giving 1,024 tokens. Six blocks attend along the streamwise direction and then across it. FiLM conditioning injects eight flow descriptors, such as flow speed, time step, mask size and whether the input is real or simulated.
+3. **Three output heads.** For every future frame and cell, the network predicts a correction to the baseline, a zero-mean fluctuation field that keeps the forecast turbulent instead of smooth, and five ordered quantiles of its own error.
+4. **Calibrated uncertainty.** A pinball loss trains the quantiles, and a differentiable version of the competition's band score tunes their width. At inference, we pick the interval width that best trades coverage against sharpness.
+5. **Energy-preserving ensemble.** Two members trained with different seeds are averaged. Averaging two turbulent forecasts cancels part of their fluctuations wherever they disagree in phase, which leaves the average smoother and weaker than real turbulence. TrussNet therefore rescales the averaged fluctuation $\bar f$ in every cell so that it carries the same turbulent energy as the individual members $f_k$, leaving the mean flow and the uncertainty band untouched.
 
-```bash
-python tools/make_final_package.py
-docker build -t physicsoracle dist/final/package
-```
+   $$\tilde f = \bar f \sqrt{\frac{\tfrac{1}{2} \sum_k \mathrm{var}_t f_k}{\mathrm{var}_t \bar f}}$$
 
-The first command assembles `dist/final/package/` and creates `dist/final/physicsoracle_track1.zip`. The second builds the Docker image from that same folder. The packaging script does not build or upload the image.
+   Both members are compiled together ahead of time with AOTInductor, so no Python runs in the timed path.
 
-The Dockerfile copies the assembled folder into `/workspace`. Training reads the mounted `/data` directory and writes inference artifacts into the mounted `/output` directory. Follow [final/README.md](final/README.md#how-to-reproduce) for the container training command and the [organizer instructions](realpde_final_starting_kit_track1/FINAL_SUBMISSION.md) for delivery requirements.
+### Closing the sim-to-real gap
 
-Edit source files in this repository, then rerun the packaging command before building the image. Changes to source files do not automatically update an existing package or ZIP.
+- Real and simulated data are trained together. Each training window comes from a real measurement with probability 0.75 and from a simulation with probability 0.25, and every epoch draws a fresh set of windows.
+- Simulated frames receive real measurement masks, random missing vectors and noise so they look like PIV data.
+- Simulation is subsampled to match the convective time step of the real measurements.
+- Each window is mirrored vertically with probability 0.5, with the cross-stream velocity negated.
 
-## Test the image
+The full description, including every hyperparameter, is in [docs/METHOD.md](docs/METHOD.md).
 
-Running the image needs Docker with the NVIDIA Container Toolkit (`--gpus`). `/path/to/train_data` holds `train_real/` (without `7575_0.h5`) and `train_sim/`, as the organizers mount it. A smoke run checks the whole pipeline in about 5 minutes; then run the organizers' command unchanged:
+## Results
+
+We submitted 17 times to the development leaderboard, each scored on hidden real measurements. The large gains came early, later changes added less and less, and the score levels off near 82. The approach we chose appears to be converging.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/figures/progress_dark.svg">
+    <img src="docs/figures/progress.svg" alt="Hidden-set score across 17 submissions, rising from 77.63 for the physics baseline to 82.01 for the final model" width="100%">
+  </picture>
+</p>
+
+## Getting started
+
+TrussNet needs Python 3.10 and an NVIDIA GPU. The pinned environment matches the competition's evaluation container.
 
 ```bash
-docker run --rm --network none --gpus '"device=0"' --shm-size 32g -e RPDE_SMOKE=1 \
-  -v /path/to/train_data:/data:ro -v /tmp/po_smoke:/output physicsoracle \
-  python -c "import solution; solution.train('/data', '/output', 'cuda')"
-grep -E "WARNING|compiled batch sizes|clean-room" /tmp/po_smoke/logs/solution.log   # expect [1, 5], no WARNING
-
-docker run --rm --network none --gpus '"device=0"' --shm-size 32g \
-  -v /path/to/train_data:/data:ro -v /path/to/output:/output physicsoracle \
-  python -c "import solution; solution.train('/data', '/output', 'cuda')"
+git clone https://github.com/sametkocbay/TrussNet.git
+cd TrussNet
+uv sync && source .venv/bin/activate
 ```
 
-The full run must log `compiled batch sizes: [1, 2, 3, 4, 5, 10]` and no `WARNING`. Use a fresh output directory for each run.
-
-## Deliver the package
-
-[FINAL_SUBMISSION.md](realpde_final_starting_kit_track1/FINAL_SUBMISSION.md) asks for the following by October 9, 2026, 24:00 UTC:
-
-1. Push the image to a **private** Docker Hub repository and give the Docker Hub account `w3nhao` read access:
-   ```bash
-   docker tag physicsoracle <dockerhub-user>/physicsoracle-t1:final
-   docker push <dockerhub-user>/physicsoracle-t1:final
-   docker inspect --format '{{index .RepoDigests 0}}' <dockerhub-user>/physicsoracle-t1:final   # name@sha256:...
-   ```
-2. Upload `dist/final/physicsoracle_track1.zip`, built from the same package folder as the image, to Google Drive and create a share link.
-3. Email realpde-competition@googlegroups.com with the team name (PhysicsOracle), the Codabench username (`physicsoracle`, as in final/README.md), the track (Track 1: Simulation-to-Real), the image name and digest (`<dockerhub-user>/physicsoracle-t1@sha256:...`), the Codabench submission id `948641`, and the Google Drive link. This list follows the organizers' email of 29 September 2026, which asks for more fields than FINAL_SUBMISSION.md.
-
-## Work on training locally
-
-Use Python 3.10. If using `uv`, install the dependencies declared in `pyproject.toml`:
+The training data is published on Hugging Face as [AI4Science-WestlakeU/RealPDE-Competition-Data](https://huggingface.co/datasets/AI4Science-WestlakeU/RealPDE-Competition-Data), about 16 GB in total. Download and unpack it, then build the cache and train the two members.
 
 ```bash
-uv sync
-source .venv/bin/activate
-```
+mkdir -p data/raw && cd data/raw
+curl -fL https://huggingface.co/datasets/AI4Science-WestlakeU/RealPDE-Competition-Data/resolve/main/train_real.tar.gz | tar xz
+curl -fL https://huggingface.co/datasets/AI4Science-WestlakeU/RealPDE-Competition-Data/resolve/main/train_sim.tar.gz | tar xz
+cd ../..
 
-Prepare the released data, whose parent directory contains `train_real/` and `train_sim/`, then train individual members:
-
-```bash
-python rpde/tools/make_cache.py --raw /path/to/train_data
+python rpde/tools/make_cache.py --raw data/raw
 python -m rpde.train --config configs/final.yaml --fold full --seed 3 --name fm_all_s3
 python -m rpde.train --config configs/final.yaml --fold full --seed 4 --name fm_all_s4
 ```
 
-The default cache is `data/cache32/`; set `RPDE_CACHE` to use another location. Training writes to `runs/<name>/`, including `ep59.pth`, `log.txt` and the resolved configuration. These commands train members only. The full `solution.train()` pipeline also fits the gate tables, compiles the ensemble and assembles the predictor. Use the Docker environment for the pinned training and CUDA compilation toolchain.
-
-## Code entry points
-
-| File | Responsibility |
-|---|---|
-| `solution.py` | `train(data_dir, output_dir, device)` and `load_predictor(output_dir, device)` |
-| `rpde/train.py`, `rpde/data.py`, `rpde/losses.py` | training loop, data sampling and losses |
-| `rpde/scaffold.py`, `rpde/cores/axial.py` | model implementation |
-| `rpde/ensemble_predict.py`, `rpde/gated_decode.py`, `rpde/decode.py` | ensemble and output decoding |
-| `rpde/tools/aot_build_ens.py` | compile the trained ensemble |
-| `rpde/tools/pack_submission.py` | assemble the inference artifacts used after training |
-| `tools/make_final_package.py` | assemble the training package and ZIP |
-
-The training package and inference artifacts are different outputs. `load_predictor()` loads the generated `/output` artifacts; keep its weights, `ens_cfg.json`, runtime code and compiled graphs together.
-
-## Update the documentation and figures
-
-Keep submission instructions in `final/README.md` and the method description in `final/METHOD.md`.
-
-Figure generation requires Matplotlib separately from the training dependencies:
+To reproduce the complete submission, with gate fitting, ahead-of-time compilation and packaging, use the Docker image.
 
 ```bash
-python tools/make_architecture_figure.py
-python tools/make_improvement_figure.py --output-dir final/figures --font-scale 1.15 --theme light
+python tools/make_final_package.py
+docker build -t trussnet dist/final/package
+docker run --rm --gpus all --shm-size 32g \
+  -v "$PWD/data/raw":/data:ro -v /path/to/output:/output trussnet \
+  python -c "import solution; solution.train('/data', '/output', 'cuda')"
 ```
 
-The architecture command writes `final/figures/architecture.svg`. The improvement command writes `final/figures/progress.svg` from `tools/figure_data/submissions.csv`. Inspect regenerated figures before packaging them.
+Load the trained predictor and forecast.
+
+```python
+import numpy as np
+import solution
+
+predictor = solution.load_predictor("/path/to/output", "cuda")
+x = np.zeros((5, 20, 32, 64, 3), dtype=np.float32)   # batch, frames, height, width, (u, v, p)
+out = predictor.predict(x)                            # dict with "prediction", "lower", "upper"
+```
+
+The two trained members from our submission are included in [`weights/`](weights). The steps to rebuild and verify the exact competition package are in [docs/REPRODUCE.md](docs/REPRODUCE.md).
+
+## Repository layout
+
+```text
+├── solution.py            train() and load_predictor(), the competition entry points
+├── configs/final.yaml     training recipe and decode settings of the submission
+├── rpde/                  model, training, losses, ensemble decode and compilation
+│   ├── scaffold.py        physics first guess
+│   └── cores/axial.py     axial transformer core
+├── submission/            inference runtime that ran on Codabench
+├── weights/               the two submitted ensemble members
+├── logs/                  original training logs
+├── docs/                  method, reproduction guide and figures
+└── tools/                 packaging and figure scripts
+```
+
+## Who we are
+
+We are three master's students at the Technical University of Munich with backgrounds in aerodynamics, numerical methods and machine learning. As Team PhysicsOracle, we build machine learning models for physics that hold up on real, noisy measurements. We are especially excited about what computer vision can teach physics, from attention over images to learning from imperfect sensor data, and about bringing ideas across the two fields in both directions.
+
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <p align="center"><img src="docs/assets/team/samet-kocbay.png" width="140" alt="Samet Kocbay"><br><b>Samet Kocbay</b></p>
+      <ul>
+        <li>M.Sc. Computational Science and Engineering, TUM</li>
+        <li>FDE at Neural Concept</li>
+        <li>Former Head of Aerodynamics, KA-RaceIng</li>
+      </ul>
+    </td>
+    <td width="33%" valign="top">
+      <p align="center"><img src="docs/assets/team/maximilian-leutschafft.png" width="140" alt="Maximilian Leutschafft"><br><b>Maximilian Leutschafft</b></p>
+      <ul>
+        <li>M.Sc. Computational Science and Engineering and M.Sc. Robotics, Cognition, Intelligence, TUM</li>
+        <li>Built the first Hyperloop demonstrator for passenger transport</li>
+      </ul>
+    </td>
+    <td width="33%" valign="top">
+      <p align="center"><img src="docs/assets/team/oscar-breiner.png" width="140" alt="Oscar Breiner"><br><b>Oscar Breiner</b></p>
+      <ul>
+        <li>M.Sc. Computer Science, TUM</li>
+        <li>2025 A2RL world champion in autonomous racing</li>
+        <li>Former machine learning lead at WARR, two satellites launched</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://github.com/sametkocbay">GitHub</a></td>
+    <td align="center"><a href="https://github.com/maxileutschafft">GitHub</a></td>
+    <td align="center"><a href="https://github.com/oscarbreiner">GitHub</a></td>
+  </tr>
+</table>
+
+Reach the team at physicsoracle.awesome@gmail.com.
+
+## Citation
+
+If you use TrussNet in your work, please cite it. The competition results paper will be linked here once it is published.
+
+```bibtex
+@software{kocbay2026trussnet,
+  title  = {{TrussNet} for Physics-First Sim-to-Real Forecasting of Turbulent Airfoil Wakes},
+  author = {Kocbay, Samet and Leutschafft, Maximilian and Breiner, Oscar},
+  year   = {2026},
+  note   = {Third place, NeurIPS 2026 RealPDE Competition, Track 1 (Sim-to-Real)},
+  url    = {https://github.com/sametkocbay/TrussNet}
+}
+```
+
+## Acknowledgements
+
+We thank Prof. Ronald Clark of the Perceptual Intelligence and Extended Reality Lab (PIXL), Department of Computer Science, University of Oxford, for advising us during the project.
+
+We thank the organizers of the NeurIPS 2026 RealPDE Competition for the dataset, the evaluation platform and their support throughout the competition. The scoring code in [`third_party/realpde_kit/`](third_party/realpde_kit) is theirs and is included unmodified.
+
+## License
+
+TrussNet is released under the [MIT License](LICENSE). The organizers' scoring code in `third_party/` is not covered by this license.

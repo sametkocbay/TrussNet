@@ -1,4 +1,4 @@
-"""PhysicsOracle, NeurIPS 2026 RealPDE Track 1: training package of the final phase.
+"""TrussNet by Team PhysicsOracle, NeurIPS 2026 RealPDE Track 1: training package of the final phase.
 
 train(data_dir, output_dir, device) reproduces our Codabench submission from the public training data:
   1. cache    the 32 x 64 training cache from data_dir/train_{real,sim}        (rpde/tools/make_cache.py)

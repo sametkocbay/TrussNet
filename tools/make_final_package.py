@@ -3,7 +3,7 @@
 
     python tools/make_final_package.py [--out dist/final]
 
-Writes <out>/package/ (Dockerfile, solution.py, README.md, METHOD.md, the code train() runs and the logs of the
+Writes <out>/package/ (Dockerfile, solution.py, README.md and METHOD.md from docs/, the code train() runs and the logs of the
 training runs behind the Codabench submission) and
 <out>/physicsoracle_track1.zip with the same files. Build the image from <out>/package/ so that the image and the zip
 hold the same code.
@@ -18,11 +18,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 FILES = {
-    "Dockerfile": "final/Dockerfile",
-    "README.md": "final/README.md",
-    "METHOD.md": "final/METHOD.md",
-    "figures/architecture.svg": "final/figures/architecture.svg",
-    "figures/progress.svg": "final/figures/progress.svg",
+    "Dockerfile": "docs/package/Dockerfile",
+    "README.md": "docs/package/README.md",
+    "METHOD.md": "docs/METHOD.md",
+    **{f"figures/{f}": f"docs/figures/{f}" for f in ("architecture.svg", "architecture_dark.svg",
+                                                       "progress.svg", "progress_dark.svg")},
     "solution.py": "solution.py",
     "configs/final.yaml": "configs/final.yaml",
     "submission/submission.py": "submission/submission.py",
